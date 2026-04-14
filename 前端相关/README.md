@@ -6,7 +6,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/你的用户名/仓库名.git
+git clone https://github.com/mamousuehs/legalAI.git
 
 # 2. 进入目录
 cd migrant-worker-app
