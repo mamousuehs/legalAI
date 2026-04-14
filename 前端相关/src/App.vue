@@ -103,7 +103,8 @@
                 ref="inputBox"
                 v-model="userInput"
                 class="input-box"
-                placeholder="用自己的话说情况，比如：老板拖欠我3个月工资，一直不给..."
+                placeholder="用自己的话说情况，比如：我叫xxx，在xx地点为xx单位工作，老板拖欠我3个月工资，一直不给..."
+                color.placeholder="gray"
                 rows="2"
                 :disabled="isLoading"
                 @keydown.enter.exact.prevent="sendMessage"
@@ -217,7 +218,7 @@
 // API 配置 — 对接 FastAPI 智能体的接口层
 // 替换 API_BASE_URL 为实际部署地址即可
 // ====================================================================
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ' https://xxxx.cpolar.cn/api/chat'
 
 /**
  * 核心 API 调用函数
@@ -257,6 +258,51 @@ async function callAgentAPI(messages, extractedInfo) {
   return await response.json()
 }
 
+// 假设这是你的发送方法（保持不变）
+const sendMessage = async (userText) => {
+  try {
+    const res = await fetch('https://759a989a.r29.cpolar.top/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: userText })
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP 错误，状态码: ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (data.status === 'success') {
+      const rawReply = data.reply;
+
+      // 剥离 AI 思考过程
+      let thinkProcess = "";
+      let finalAnswer = rawReply;
+
+      const thinkMatch = rawReply.match(/<think>([\s\S]*?)<\/think>/);
+      if (thinkMatch) {
+        thinkProcess = thinkMatch[1].trim();
+        finalAnswer = rawReply.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+      }
+
+      console.log("后台查到的法律参考:", data.retrieved_context);
+      console.log("AI 的思考过程:", thinkProcess);
+      console.log("最终给用户的回答:", finalAnswer);
+    }
+  } catch (error) {
+    console.error("请求失败:", error);
+  }
+};
+
+
+// ✅ 关键修改：页面加载自动执行（默认启用）
+window.addEventListener('load', () => {
+  sendMessage("你好");  // 👉 这里可以改成你想默认问的问题
+});
+
 /**
  * 生成申请书 API
  * FastAPI 端期望接收：{ extracted_info: { ... } }
@@ -279,6 +325,7 @@ async function generateDocumentAPI(extractedInfo) {
 
   return await response.json()
 }
+
 
 // ====================================================================
 // 本地 Mock — 未对接智能体时的降级逻辑（开发调试用）
@@ -429,7 +476,7 @@ async function mockGenerateDocumentAPI(extractedInfo) {
 // ====================================================================
 // 是否使用 Mock（无后端时自动降级）
 // ====================================================================
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || true
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || false
 
 export default {
   name: 'MigrantWorkerLegal',
@@ -829,7 +876,7 @@ export default {
   width: 100%;
   padding: 18px;
   background: var(--primary);
-  color: white;
+  color: gray;
   border: none;
   border-radius: var(--radius);
   font-size: 20px;
