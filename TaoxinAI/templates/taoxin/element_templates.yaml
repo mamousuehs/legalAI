@@ -1,0 +1,8 @@
+elements:
+  unpaid_wages:
+    - 拖欠工资事实是否明确
+    - 金额是否可以计算
+  labor_relationship:
+    - 是否存在用工关系线索
+    - 是否存在合同或替代性证据
+

@@ -1,0 +1,8 @@
+issues:
+  - issue_code: unpaid_wages
+    issue_name: 是否存在拖欠劳动报酬
+    priority: 1
+  - issue_code: labor_relationship
+    issue_name: 是否成立劳动关系或事实劳动关系
+    priority: 2
+
