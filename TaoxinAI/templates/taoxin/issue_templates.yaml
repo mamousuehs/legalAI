@@ -1,8 +1,15 @@
 issues:
   - issue_code: unpaid_wages
-    issue_name: 是否存在拖欠劳动报酬
+    issue_name: 是否存在拖欠劳动报酬事实及具体金额
     priority: 1
+    description: 案件最核心诉求。需系统确认是否发生欠薪、欠薪的具体时间段、以及欠薪金额是否可以计算。
+    
   - issue_code: labor_relationship
-    issue_name: 是否成立劳动关系或事实劳动关系
+    issue_name: 双方是否成立劳动关系或劳务关系
     priority: 2
-
+    description: 维权的基础前提。需区分申请人是给个人包工头干活（劳务关系），还是给具有法人资格的公司干活（劳动关系）。这决定了后续走劳动仲裁还是法院诉讼。
+    
+  - issue_code: evidence_adequacy
+    issue_name: 现有证据链是否足以支撑诉求
+    priority: 3
+    description: 评估维权成功率。梳理现有书面或电子证据能否形成闭环。
