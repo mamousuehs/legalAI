@@ -1,5 +1,18 @@
 rules:
-  - 缺少金额事实时，不能输出确定金额结论
-  - 缺少劳动关系线索时，结论必须降强表达
-  - 每个争点至少要对应一个 IRAC 草稿
-
+  - rule_code: strict_amount
+    description: 缺少金额事实时，不能输出确定金额结论
+    target: conclusion
+    condition: "missing(wage_amount)"
+    action: "downgrade_certainty" # 动作：降级确定性表达
+    
+  - rule_code: weak_relationship
+    description: 缺少劳动关系直接证据时，结论必须降强表达，提示存在被认定为劳务关系的风险
+    target: conclusion
+    condition: "missing(relationship_proof)"
+    action: "add_risk_warning" # 动作：强制添加风险提示
+    
+  - rule_code: irac_completeness
+    description: 每个被触发的争点至少要对应一个 IRAC 草稿
+    target: irac_generator
+    condition: "irac_count < issue_count"
+    action: "block_generation" # 动作：拦截文书生成，退回重做
