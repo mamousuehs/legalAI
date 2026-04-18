@@ -7,3 +7,6 @@
 请阅读ARCHITECTURE_TODO.md
 
 4/15，4/16划分目录分工，请看taoxinAI文件夹，teamsplit文件以及其目录下readme文件
+
+
+4、18 将环境修改为3.9适配环境，对齐接口。

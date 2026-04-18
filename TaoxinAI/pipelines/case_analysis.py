@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
 from pathlib import Path
+from typing import Any
 
+from TaoxinAI.repositories.chroma_repo import ChromaRepository
 from TaoxinAI.schemas.intake import CaseInput
 from TaoxinAI.schemas.reasoning import (
     AnalysisResponse,
@@ -10,8 +11,6 @@ from TaoxinAI.schemas.reasoning import (
     DocumentGenerationResponse,
     FullAnalysisResponse,
 )
-from TaoxinAI.schemas.retrieval import RetrievedAuthority
-from TaoxinAI.repositories.chroma_repo import ChromaRepository
 from TaoxinAI.services.fact.rule_based_extractor import RuleBasedFactExtractor
 from TaoxinAI.services.intake.entity_extractor import EntityExtractor
 from TaoxinAI.services.intake.normalizer import IntakeNormalizer
@@ -29,15 +28,15 @@ from TaoxinAI.services.verification.completeness_checker import CompletenessChec
 class CaseAnalysisPipeline:
     """High-level workflow for the wage-recovery reasoning prototype."""
 
-    def __init__(self, collection: Any, llm_client: Any):
-        self.collection = collection
+    def __init__(self, law_collection: Any, case_collection: Any, llm_client: Any):
         self.llm_client = llm_client
         self.intake_normalizer = IntakeNormalizer()
         self.entity_extractor = EntityExtractor()
-        self.chroma_repo = ChromaRepository(collection)
+        self.law_repo = ChromaRepository(law_collection)
+        self.case_repo = ChromaRepository(case_collection)
         template_root = Path(__file__).resolve().parents[1] / "templates" / "taoxin"
-        self.law_retriever = LawRetriever(self.chroma_repo)
-        self.case_retriever = CaseRetriever(self.chroma_repo)
+        self.law_retriever = LawRetriever(self.law_repo)
+        self.case_retriever = CaseRetriever(self.case_repo)
         self.template_retriever = TemplateRetriever(template_root)
         self.reranker = Reranker()
         self.issue_identifier = RuleBasedIssueIdentifier()
@@ -57,17 +56,11 @@ class CaseAnalysisPipeline:
         extracted_info["_stage"] = next_stage
         extracted_info.update(self.entity_extractor.extract(query_text))
 
-        if "公司" in query_text or "单位" in query_text:
-            extracted_info["employer_type"] = "company"
-        elif "包工头" in query_text or "老板" in query_text:
-            extracted_info["employer_type"] = "contractor_or_employer"
-
-        if "合同" in query_text:
-            extracted_info["has_contract"] = "有" if "没" not in query_text else "没有"
-
         issues = self.issue_identifier.identify(case_input, retrieved)
         can_generate_doc = bool(
-            extracted_info.get("employer_type") and extracted_info.get("has_contract")
+            extracted_info.get("employer_type") and any(
+                key in extracted_info for key in ["amount", "evidence_types", "has_contract"]
+            )
         )
 
         return AnalysisResponse(
@@ -142,7 +135,7 @@ class CaseAnalysisPipeline:
                 return message.content
         return ""
 
-    def _retrieve_authorities(self, query_text: str) -> list[RetrievedAuthority]:
+    def _retrieve_authorities(self, query_text: str):
         if not query_text:
             return []
 
@@ -156,7 +149,7 @@ class CaseAnalysisPipeline:
         if stage == "initial":
             return (
                 "basic_facts",
-                "请先告诉我几个基础事实：您是给公司干活，还是给包工头/老板干活？有没有签合同？",
+                "请先告诉我几个基础事实：您是给公司干活，还是给包工头或老板干活？有没有签合同？",
                 ["给公司干活", "给包工头干活", "有合同", "没有合同"],
             )
 

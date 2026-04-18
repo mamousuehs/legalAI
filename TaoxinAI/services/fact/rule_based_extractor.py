@@ -12,7 +12,7 @@ class RuleBasedFactExtractor:
         text = " ".join(message.content for message in case_input.messages if message.role == "user")
         facts: list[FactItem] = []
 
-        amount_match = re.search(r"(\\d+(?:\\.\\d+)?)\\s*(元|块)", text)
+        amount_match = re.search(r"(\d+(?:\.\d+)?)\s*(元|块)", text)
         if amount_match:
             facts.append(
                 FactItem(
@@ -50,4 +50,3 @@ class RuleBasedFactExtractor:
                 )
 
         return facts
-

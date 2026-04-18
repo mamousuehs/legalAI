@@ -1,12 +1,11 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 
 class FactItem(BaseModel):
-    issue_code: str | None = None
+    issue_code: Optional[str] = None
     fact_type: str
     value: str
     evidence_status: Literal["supported", "claimed", "missing", "contradicted"]
-    source_span: str | None = None
-
+    source_span: Optional[str] = None

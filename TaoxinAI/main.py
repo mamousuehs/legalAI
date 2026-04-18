@@ -35,21 +35,31 @@ def build_llm_client() -> AsyncOpenAI:
     )
 
 
-def build_collection():
+def build_collections():
     _bootstrap_legacy_knowledge_base()
     chroma_client = chromadb.PersistentClient(path=str(LEGAL_DB_DIR))
-    collection = chroma_client.get_or_create_collection(name="laws")
+    law_collection = chroma_client.get_or_create_collection(name="laws")
+    case_collection = chroma_client.get_or_create_collection(name="cases")
 
-    if collection.count() == 0:
-        collection.add(
+    if law_collection.count() == 0:
+        law_collection.add(
             documents=[
-                "《劳动合同法》第八十二条：用人单位自用工之日起超过一个月不满一年未与劳动者订立书面劳动合同的，应当向劳动者每月支付二倍的工资。",
-                "【办案指引】在没有书面合同的情况下，微信聊天记录、转账记录、考勤打卡记录均可作为认定存在事实劳动关系的有效证据。",
+                "《劳动合同法》第八十二条：用人单位自用工之日起超过一个月不满一年未与劳动者订立书面劳动合同的，应当向劳动者每月支付二倍的工资。"
             ],
-            ids=["law_1", "case_1"],
+            ids=["law_1"],
+            metadatas=[{"source_type": "norm", "title": "劳动合同法第八十二条"}],
         )
 
-    return collection
+    if case_collection.count() == 0:
+        case_collection.add(
+            documents=[
+                "在没有书面合同的情况下，微信聊天记录、转账记录、考勤打卡记录均可作为认定存在事实劳动关系的有效证据。"
+            ],
+            ids=["case_1"],
+            metadatas=[{"source_type": "case", "title": "事实劳动关系证据指引"}],
+        )
+
+    return law_collection, case_collection
 
 
 def _bootstrap_legacy_knowledge_base() -> None:
@@ -71,9 +81,10 @@ def _bootstrap_legacy_knowledge_base() -> None:
 
 
 llm_client = build_llm_client()
-knowledge_collection = build_collection()
+law_collection, case_collection = build_collections()
 pipeline = CaseAnalysisPipeline(
-    collection=knowledge_collection,
+    law_collection=law_collection,
+    case_collection=case_collection,
     llm_client=llm_client,
 )
 
