@@ -1,8 +1,20 @@
 elements:
   unpaid_wages:
-    - 拖欠工资事实是否明确
-    - 金额是否可以计算
+    - element_id: wage_fact
+      name: 拖欠工资事实是否明确
+      required: true
+      evidence_hints: ["欠条", "工资结算单", "微信催款记录", "老板口头承认的录音"]
+    - element_id: wage_amount
+      name: 金额是否可以明确计算
+      required: true
+      evidence_hints: ["转账记录差额", "考勤天数统计", "同工种工友工资标准"]
+      
   labor_relationship:
-    - 是否存在用工关系线索
-    - 是否存在合同或替代性证据
-
+    - element_id: subject_qualification
+      name: 用工主体身份是否明确
+      required: true
+      evidence_hints: ["公司准确名称", "包工头真实姓名及身份证号", "营业执照照片"]
+    - element_id: relationship_proof
+      name: 是否存在合同或替代性证据
+      required: true
+      evidence_hints: ["劳动合同", "劳务协议", "工作服照片", "工牌/出入证", "打卡记录", "工友证言"]
