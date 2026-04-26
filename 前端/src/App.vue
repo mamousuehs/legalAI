@@ -76,28 +76,19 @@
               />
             </div>
 
-            <!-- 3. 为个人还是企业工作 -->
+            <!-- ★ 3. 为谁干活（改为填空） -->
             <div class="form-item">
               <label class="form-label">
                 <span class="label-icon">🏢</span>
                 您给谁干活？
               </label>
-              <div class="toggle-group">
-                <button
-                  class="toggle-btn"
-                  :class="{ active: intakeForm.employerType === 'individual' }"
-                  @click="intakeForm.employerType = 'individual'"
-                >
-                  👷 个人包工头
-                </button>
-                <button
-                  class="toggle-btn"
-                  :class="{ active: intakeForm.employerType === 'company' }"
-                  @click="intakeForm.employerType = 'company'"
-                >
-                  🏢 公司 / 单位
-                </button>
-              </div>
+              <input
+                class="form-input"
+                type="text"
+                v-model="intakeForm.employerType"
+                placeholder="例：李老板（包工头）、北京某建筑公司"
+                maxlength="50"
+              />
             </div>
 
             <!-- 4. 欠薪金额 -->
@@ -129,14 +120,12 @@
                   class="form-input date-input"
                   type="month"
                   v-model="intakeForm.wageStartMonth"
-                  placeholder="开始月份"
                 />
                 <span class="date-sep">至</span>
                 <input
                   class="form-input date-input"
                   type="month"
                   v-model="intakeForm.wageEndMonth"
-                  placeholder="结束月份"
                 />
               </div>
             </div>
@@ -218,7 +207,6 @@
                 </div>
                 <div v-if="msg.cardOpen" class="card-body">
 
-                  <!-- 案件基本信息 -->
                   <div class="card-section">
                     <div class="section-label blue">📌 案件基本信息</div>
                     <div class="info-grid">
@@ -229,7 +217,6 @@
                     </div>
                   </div>
 
-                  <!-- 维权路径 -->
                   <div class="card-section">
                     <div class="section-label green">🛤️ 建议维权路径</div>
                     <div class="path-list">
@@ -251,7 +238,6 @@
                     </div>
                   </div>
 
-                  <!-- 证据清单 -->
                   <div class="card-section">
                     <div class="section-label amber">📁 所需证据清单</div>
                     <div class="evidence-list">
@@ -268,7 +254,6 @@
                     </div>
                   </div>
 
-                  <!-- 法条 -->
                   <div class="card-section">
                     <div class="section-label red">⚖️ 适用法条</div>
                     <div class="law-list">
@@ -375,8 +360,6 @@ async function callAgentAPI(messages, intakeData) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message: lastUserText,
-      // 表单数据随每次请求一起发送给后端
-      // 后端可用这些字段做上下文补全，未填项为 null
       user_info: intakeData,
     })
   })
@@ -410,56 +393,40 @@ function getMockAnalysis() {
       { name: '工友证人联系方式',    tip: '可在仲裁或诉讼中出庭作证',             have: false, importance: 'supplement' },
     ],
     laws: [
-      { title: '《劳动法》第五十条',         content: '工资应当以货币形式按月支付给劳动者本人，不得克扣或者无故拖欠劳动者的工资。' },
-      { title: '《劳动合同法》第三十条',     content: '用人单位应当按照劳动合同约定和国家规定，向劳动者及时足额支付劳动报酬。' },
+      { title: '《劳动法》第五十条',               content: '工资应当以货币形式按月支付给劳动者本人，不得克扣或者无故拖欠劳动者的工资。' },
+      { title: '《劳动合同法》第三十条',           content: '用人单位应当按照劳动合同约定和国家规定，向劳动者及时足额支付劳动报酬。' },
       { title: '《保障农民工工资支付条例》第三十条', content: '分包单位拖欠农民工工资的，由施工总承包单位先行清偿，再依法进行追偿。' },
     ],
   }
 }
 
 // =====================================================================
-// 工具函数：将 intakeForm 转成一段自然语言，作为对话首条消息发送
-// 未填项跳过，不生成对应句子
+// 将表单内容拼成自然语言，作为对话首条消息
 // =====================================================================
 function buildIntakeSummary(form) {
   const parts = []
-
-  if (form.name)
-    parts.push(`我叫${form.name}`)
-
-  if (form.workLocation)
-    parts.push(`在${form.workLocation}工作`)
-
-  if (form.employerType === 'individual')
-    parts.push('给个人包工头干活')
-  else if (form.employerType === 'company')
-    parts.push('给公司/单位干活')
-
-  if (form.wageAmount)
-    parts.push(`被拖欠工资共 ${form.wageAmount} 元`)
-
+  if (form.name)         parts.push(`我叫${form.name}`)
+  if (form.workLocation) parts.push(`在${form.workLocation}工作`)
+  if (form.employerType) parts.push(`给"${form.employerType}"干活`)
+  if (form.wageAmount)   parts.push(`被拖欠工资共 ${form.wageAmount} 元`)
   if (form.wageStartMonth && form.wageEndMonth)
     parts.push(`欠薪时间段是 ${form.wageStartMonth} 至 ${form.wageEndMonth}`)
   else if (form.wageStartMonth)
     parts.push(`从 ${form.wageStartMonth} 开始欠薪`)
-
-  if (form.hasArbitration === true)
-    parts.push('已经完成了劳动仲裁')
-  else if (form.hasArbitration === false)
-    parts.push('尚未进行劳动仲裁')
-
+  if (form.hasArbitration === true)  parts.push('已经完成了劳动仲裁')
+  if (form.hasArbitration === false) parts.push('尚未进行劳动仲裁')
   if (parts.length === 0) return null
   return parts.join('，') + '。请帮我分析如何维权。'
 }
 
 // =====================================================================
-// 工具函数：检查 intakeForm 哪些必要字段还未填，用于对话中提醒
+// 检查哪些字段还未填，用于对话中提醒
 // =====================================================================
 function getMissingFields(form) {
   const missing = []
   if (!form.name)           missing.push('您的姓名')
   if (!form.workLocation)   missing.push('工作地点')
-  if (!form.employerType)   missing.push('用工方类型（个人还是公司）')
+  if (!form.employerType)   missing.push('用工方名称')
   if (!form.wageAmount)     missing.push('欠薪金额')
   if (!form.wageStartMonth) missing.push('欠薪时间段')
   if (form.hasArbitration === null) missing.push('是否已完成劳动仲裁')
@@ -474,18 +441,17 @@ export default {
 
   data() {
     return {
-      currentStep: 'welcome',   // 'welcome' | 'intake' | 'chat'
+      currentStep: 'welcome',
       showHelp: false,
       showLegalAidModal: false,
       messages: [],
       userInput: '',
       isLoading: false,
 
-      // 表单数据：六项，未填为 null
       intakeForm: {
         name:           '',    // 姓名
         workLocation:   '',    // 工作地址
-        employerType:   null,  // 'individual' | 'company' | null
+        employerType:   '',    // 用工方描述（自由填写，原始字符串）
         wageAmount:     '',    // 欠薪金额（元）
         wageStartMonth: '',    // 欠薪开始月份 yyyy-MM
         wageEndMonth:   '',    // 欠薪结束月份 yyyy-MM
@@ -496,18 +462,14 @@ export default {
 
   methods: {
 
-    // ── 表单提交（填了内容点"开始分析"）──────────────────────
     submitIntake() {
       this.currentStep = 'chat'
       this.$nextTick(() => {
         const summary = buildIntakeSummary(this.intakeForm)
-
         if (summary) {
-          // 把表单内容作为用户第一句话显示，并立刻发给后端
           this.pushUserMessage(summary)
           this.callAgent()
         } else {
-          // 一项都没填，和跳过一样
           this.pushAssistantMessage(
             '您好！我是您的法律咨询助手 👋\n请告诉我您的讨薪情况，比如您给谁干活、在哪里干活、欠了多少钱？我来帮您分析。'
           )
@@ -515,7 +477,6 @@ export default {
       })
     },
 
-    // ── 跳过表单，直接进入对话 ───────────────────────────────
     skipIntake() {
       this.currentStep = 'chat'
       this.$nextTick(() => {
@@ -525,7 +486,6 @@ export default {
       })
     },
 
-    // ── 发送消息 ─────────────────────────────────────────────
     async sendMessage() {
       const text = this.userInput.trim()
       if (!text || this.isLoading) return
@@ -534,7 +494,6 @@ export default {
       await this.callAgent()
     },
 
-    // ── 调用后端 ─────────────────────────────────────────────
     async callAgent() {
       this.isLoading = true
       this.scrollToBottom()
@@ -543,15 +502,16 @@ export default {
         .filter(m => !m.isSystem)
         .map(m => ({ role: m.role, content: m.content }))
 
-      // 整理发送给后端的 user_info（空字符串统一转为 null）
+      // 发送给后端的 user_info，字段名与之前保持一致
+      // employerType 保持原始字符串传输，后端自行解析
       const intakeData = {
-        name:           this.intakeForm.name           || null,
-        work_location:  this.intakeForm.workLocation   || null,
-        employer_type:  this.intakeForm.employerType   || null,
-        wage_amount:    this.intakeForm.wageAmount      ? Number(this.intakeForm.wageAmount) : null,
-        wage_period:    (this.intakeForm.wageStartMonth && this.intakeForm.wageEndMonth)
-                          ? `${this.intakeForm.wageStartMonth} 至 ${this.intakeForm.wageEndMonth}`
-                          : null,
+        name:            this.intakeForm.name           || null,
+        work_location:   this.intakeForm.workLocation   || null,
+        employer_type:   this.intakeForm.employerType   || null,
+        wage_amount:     this.intakeForm.wageAmount     ? Number(this.intakeForm.wageAmount) : null,
+        wage_period:     (this.intakeForm.wageStartMonth && this.intakeForm.wageEndMonth)
+                           ? `${this.intakeForm.wageStartMonth} 至 ${this.intakeForm.wageEndMonth}`
+                           : null,
         has_arbitration: this.intakeForm.hasArbitration,
       }
 
@@ -561,7 +521,6 @@ export default {
         let finalReply = result.reply || ''
         finalReply = finalReply.replace(/<think>[\s\S]*?<\/think>/, '').trim()
 
-        // 检查缺失字段，若有则追加提醒
         const missing = getMissingFields(this.intakeForm)
         if (missing.length > 0) {
           finalReply += `\n\n📝 **为了帮您更准确地分析，还需要了解：${missing.join('、')}，请补充说明。**`
@@ -581,7 +540,6 @@ export default {
       }
     },
 
-    // ── 消息推送辅助 ─────────────────────────────────────────
     pushUserMessage(content) {
       this.messages.push({ role: 'user', content })
       this.$nextTick(() => this.scrollToBottom())
@@ -618,7 +576,7 @@ export default {
       if (!confirm('确定要重新开始吗？当前对话内容将清空。')) return
       this.messages = []
       this.intakeForm = {
-        name: '', workLocation: '', employerType: null,
+        name: '', workLocation: '', employerType: '',
         wageAmount: '', wageStartMonth: '', wageEndMonth: '', hasArbitration: null,
       }
       this.currentStep = 'welcome'
@@ -628,7 +586,6 @@ export default {
 </script>
 
 <style>
-/* ===== 基础变量 ===== */
 :root {
   --primary:    #E85D26;
   --primary-bg: #FFF5F0;
@@ -641,7 +598,6 @@ export default {
   --shadow:     0 2px 12px rgba(0,0,0,0.08);
   --radius:     16px;
   --font-body:  'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-
   --blue-lt:  #D6EAF8; --blue-dk:  #1A5276;
   --green-lt: #D5F5E3; --green-dk: #1E8449;
   --amber-lt: #FDEBD0; --amber-dk: #935116;
@@ -657,55 +613,40 @@ export default {
   font-family: var(--font-body);
 }
 
-/* ── Header ── */
+/* Header */
 .app-header {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 18px; background: var(--primary);
-  color: white; box-shadow: 0 2px 8px rgba(232,93,38,0.3);
-  flex-shrink: 0;
+  color: white; box-shadow: 0 2px 8px rgba(232,93,38,0.3); flex-shrink: 0;
 }
 .header-text h1 { font-size: 20px; }
 .header-text p  { font-size: 12px; opacity: .85; }
 .header-badge   { margin-left: auto; background: white; color: var(--primary); padding: 3px 10px; border-radius: 20px; font-size: 12px; }
 
-/* ── Main ── */
 .app-main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 
-/* ── 欢迎页 ── */
+/* 欢迎页 */
 .welcome-screen { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 32px 24px; overflow-y: auto; }
 .hero-emoji      { font-size: 64px; margin-bottom: 16px; }
 .welcome-hero h2 { color: var(--primary); margin-bottom: 10px; font-size: 22px; }
 .hero-sub        { color: var(--text-mid); text-align: center; line-height: 1.6; margin-bottom: 20px; }
 .welcome-promises { background: white; border-radius: 16px; padding: 16px; width: 100%; margin-bottom: 20px; }
-.promise-item    { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
+.promise-item   { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 15px; }
 .promise-item:last-child { border-bottom: none; }
-.btn-start       { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 16px; font-size: 18px; font-weight: bold; cursor: pointer; transition: opacity .15s; }
+.btn-start      { width: 100%; padding: 18px; background: var(--primary); color: white; border: none; border-radius: 16px; font-size: 18px; font-weight: bold; cursor: pointer; transition: opacity .15s; }
 .btn-start:hover { opacity: .9; }
-.disclaimer      { font-size: 11px; color: var(--text-light); margin-top: 16px; text-align: center; }
+.disclaimer     { font-size: 11px; color: var(--text-light); margin-top: 16px; text-align: center; }
 
-/* ══════════════════════════════════════════════════════ */
-/* ── 信息收集表单页 ──                                   */
-/* ══════════════════════════════════════════════════════ */
-.intake-screen {
-  flex: 1; display: flex; flex-direction: column;
-  overflow-y: auto; padding: 20px 20px 0;
-}
-
+/* 表单页 */
+.intake-screen { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px 20px 0; }
 .intake-header { margin-bottom: 20px; }
-.intake-step-label {
-  font-size: 12px; font-weight: 700; letter-spacing: .06em;
-  color: var(--primary); text-transform: uppercase; margin-bottom: 6px;
-}
-.intake-title { font-size: 20px; color: var(--text-dark); margin-bottom: 6px; }
-.intake-sub   { font-size: 13px; color: var(--text-light); }
+.intake-step-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--primary); margin-bottom: 6px; }
+.intake-title  { font-size: 20px; color: var(--text-dark); margin-bottom: 6px; }
+.intake-sub    { font-size: 13px; color: var(--text-light); }
+.intake-form   { display: flex; flex-direction: column; gap: 16px; }
 
-.intake-form  { display: flex; flex-direction: column; gap: 16px; }
-
-.form-item    { display: flex; flex-direction: column; gap: 6px; }
-.form-label   {
-  font-size: 14px; font-weight: 600; color: var(--text-dark);
-  display: flex; align-items: center; gap: 6px;
-}
+.form-item  { display: flex; flex-direction: column; gap: 6px; }
+.form-label { font-size: 14px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 6px; }
 .label-icon { font-size: 16px; }
 
 .form-input {
@@ -717,20 +658,15 @@ export default {
 .form-input:focus { border-color: var(--primary); }
 .form-input::placeholder { color: #bbb; }
 
-/* 金额输入带单位 */
 .input-with-unit { position: relative; display: flex; align-items: center; }
 .input-with-unit .form-input { padding-right: 36px; }
-.input-unit {
-  position: absolute; right: 14px;
-  font-size: 14px; color: var(--text-light); pointer-events: none;
-}
+.input-unit { position: absolute; right: 14px; font-size: 14px; color: var(--text-light); pointer-events: none; }
 
-/* 日期区间 */
 .date-range-row { display: flex; align-items: center; gap: 8px; }
 .date-input     { flex: 1; }
 .date-sep       { font-size: 14px; color: var(--text-light); white-space: nowrap; }
 
-/* 切换按钮组 */
+/* 仲裁切换按钮（仅第6项保留） */
 .toggle-group { display: flex; gap: 8px; }
 .toggle-btn {
   flex: 1; padding: 10px 8px;
@@ -738,33 +674,28 @@ export default {
   background: white; font-family: var(--font-body); font-size: 14px;
   color: var(--text-mid); cursor: pointer; transition: all .15s;
 }
-.toggle-btn:hover       { border-color: var(--primary); color: var(--primary); }
-.toggle-btn.active      { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); font-weight: 700; }
+.toggle-btn:hover  { border-color: var(--primary); color: var(--primary); }
+.toggle-btn.active { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); font-weight: 700; }
 
-/* 底部按钮组 */
-.intake-actions {
-  padding: 20px 0 28px;
-  display: flex; flex-direction: column; gap: 10px;
-}
+.intake-actions { padding: 20px 0 28px; display: flex; flex-direction: column; gap: 10px; }
 .btn-skip {
-  width: 100%; padding: 14px;
-  background: none; border: 1.5px solid var(--border);
-  border-radius: 16px; font-family: var(--font-body);
-  font-size: 15px; color: var(--text-light); cursor: pointer;
+  width: 100%; padding: 14px; background: none;
+  border: 1.5px solid var(--border); border-radius: 16px;
+  font-family: var(--font-body); font-size: 15px; color: var(--text-light); cursor: pointer;
   transition: border-color .15s, color .15s;
 }
 .btn-skip:hover { border-color: var(--text-mid); color: var(--text-mid); }
 
-/* ── 对话页 ── */
+/* 对话页 */
 .chat-screen        { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .messages-container { flex: 1; overflow-y: auto; padding: 16px 14px; }
 .message-group      { margin-bottom: 16px; }
 .message-row        { display: flex; align-items: flex-end; gap: 8px; }
 .message-row.user   { flex-direction: row-reverse; }
 
-.avatar            { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.assistant-avatar  { background: var(--primary); color: white; }
-.user-avatar       { background: #6B7280; }
+.avatar           { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.assistant-avatar { background: var(--primary); color: white; }
+.user-avatar      { background: #6B7280; }
 
 .bubble           { max-width: 78%; padding: 12px 16px; border-radius: 16px; font-size: 15px; line-height: 1.6; box-shadow: var(--shadow); }
 .bubble.assistant { background: white; border-bottom-left-radius: 4px; }
@@ -776,29 +707,18 @@ export default {
 .dot:nth-child(3) { animation-delay: .4s; }
 @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.6;}30%{transform:translateY(-6px);opacity:1;} }
 
-/* ── 分析卡片 ── */
-.analysis-card {
-  margin: 8px 0 0 44px; background: white;
-  border: 1px solid var(--border); border-radius: 14px;
-  overflow: hidden; box-shadow: var(--shadow);
-}
-.card-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; background: #FFF5F0;
-  border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
-}
-.card-title  { font-size: 14px; font-weight: 700; color: var(--primary); }
-.card-toggle { font-size: 12px; color: var(--text-light); }
-.card-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+/* 分析卡片 */
+.analysis-card { margin: 8px 0 0 44px; background: white; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+.card-header   { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #FFF5F0; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+.card-title    { font-size: 14px; font-weight: 700; color: var(--primary); }
+.card-toggle   { font-size: 12px; color: var(--text-light); }
+.card-section  { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .card-section:last-child { border-bottom: none; }
-.section-label {
-  font-size: 12px; font-weight: 700; padding: 3px 10px;
-  border-radius: 20px; display: inline-block; margin-bottom: 12px;
-}
-.section-label.blue   { background: var(--blue-lt);  color: var(--blue-dk);  }
-.section-label.green  { background: var(--green-lt); color: var(--green-dk); }
-.section-label.amber  { background: var(--amber-lt); color: var(--amber-dk); }
-.section-label.red    { background: var(--red-lt);   color: var(--red-dk);   }
+.section-label { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: inline-block; margin-bottom: 12px; }
+.section-label.blue  { background: var(--blue-lt);  color: var(--blue-dk);  }
+.section-label.green { background: var(--green-lt); color: var(--green-dk); }
+.section-label.amber { background: var(--amber-lt); color: var(--amber-dk); }
+.section-label.red   { background: var(--red-lt);   color: var(--red-dk);   }
 
 .info-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .info-item  { background: #F7F4EF; border-radius: 8px; padding: 8px 10px; }
@@ -829,7 +749,7 @@ export default {
 .law-title   { font-size: 12px; font-weight: 700; color: var(--red-dk); margin-bottom: 5px; }
 .law-content { font-size: 12px; color: var(--text-mid); line-height: 1.6; }
 
-/* ── 输入区 ── */
+/* 输入区 */
 .input-area { padding: 10px 14px 12px; background: white; border-top: 1px solid var(--border); flex-shrink: 0; }
 .input-row  { display: flex; gap: 10px; align-items: flex-end; }
 .input-box  { flex: 1; padding: 10px; border: 2px solid var(--border); border-radius: 12px; resize: none; background: var(--bg); min-height: 44px; font-family: var(--font-body); font-size: 15px; }
@@ -837,12 +757,12 @@ export default {
 .send-btn   { width: 60px; height: 44px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 15px; }
 .send-btn:disabled { opacity: .5; cursor: not-allowed; }
 
-/* ── 底部导航 ── */
+/* 底部导航 */
 .bottom-nav { display: flex; background: white; border-top: 1px solid var(--border); padding: 5px 0; flex-shrink: 0; }
 .nav-item   { flex: 1; display: flex; flex-direction: column; align-items: center; background: none; border: none; padding: 5px; color: var(--text-mid); cursor: pointer; font-family: var(--font-body); font-size: 12px; }
 .nav-icon   { font-size: 20px; }
 
-/* ── 弹窗 ── */
+/* 弹窗 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: flex-end; z-index: 100; }
 .modal-box     { width: 100%; max-width: 480px; margin: 0 auto; background: white; border-radius: 20px 20px 0 0; padding: 24px; }
 .modal-box h3  { margin-bottom: 16px; font-size: 18px; }
@@ -851,9 +771,9 @@ export default {
 .hotline-item  { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--border); }
 .hotline-number { color: var(--primary); font-size: 22px; font-weight: bold; text-decoration: none; }
 
-/* ── 动画 ── */
-.fade-enter-active, .fade-leave-active  { transition: opacity .25s; }
-.fade-enter-from,   .fade-leave-to      { opacity: 0; }
+/* 动画 */
+.fade-enter-active, .fade-leave-active   { transition: opacity .25s; }
+.fade-enter-from,   .fade-leave-to       { opacity: 0; }
 .modal-enter-active, .modal-leave-active { transition: transform .3s ease; }
 .modal-enter-from,   .modal-leave-to     { transform: translateY(100%); }
 </style>
