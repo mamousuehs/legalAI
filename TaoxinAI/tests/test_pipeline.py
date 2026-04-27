@@ -1,103 +1,250 @@
 import pytest
+
+from TaoxinAI.pipelines.case_analysis import CaseAnalysisPipeline
 from TaoxinAI.schemas.common import Message
 from TaoxinAI.schemas.intake import CaseInput
-from TaoxinAI.schemas.reasoning import DocumentGenerationRequest, FullAnalysisResponse, VerificationResult, IRACDraft
-from TaoxinAI.pipelines.case_analysis import CaseAnalysisPipeline
+from TaoxinAI.schemas.reasoning import (
+    DocumentGenerationRequest,
+    FullAnalysisResponse,
+    IRACDraft,
+    VerificationResult,
+)
 
-# ==========================================
-# 1. 准备 Mock (假) 数据库和客户端
-# ==========================================
+
 class MockCollection:
-    """模拟 ChromaDB 的 Collection 对象"""
-    def __init__(self, mock_type="norm"):
+    def __init__(self, mock_type: str = "norm"):
         self.mock_type = mock_type
 
     def query(self, query_texts, n_results):
-        # 模拟 Chroma 原生返回的复杂字典格式
+        if self.mock_type == "norm":
+            return {
+                "documents": [["《劳动合同法》第三十条", "用人单位应当按照劳动合同约定和国家规定，及时足额支付劳动报酬。"]],
+                "ids": [["law_30", "law_31"]],
+                "metadatas": [[
+                    {"source_type": "norm", "title": "《劳动合同法》第三十条"},
+                    {"source_type": "norm", "title": "《劳动合同法》第三十条"},
+                ]],
+            }
+
         return {
-            "documents": [["测试文本内容"]],
+            "documents": [["相似案例内容"]],
             "ids": [[f"{self.mock_type}_123"]],
-            "metadatas": [[{"source_type": self.mock_type, "title": "测试依据"}]]
+            "metadatas": [[{"source_type": self.mock_type, "title": "测试案例"}]],
         }
 
+    def get(self, ids, include):
+        record_map = {
+            "law_30": {
+                "document": "《劳动合同法》第三十条",
+                "metadata": {"source_type": "norm", "title": "《劳动合同法》第三十条"},
+            },
+            "law_31": {
+                "document": "用人单位应当按照劳动合同约定和国家规定，及时足额支付劳动报酬。",
+                "metadata": {"source_type": "norm", "title": "《劳动合同法》第三十条"},
+            },
+        }
+
+        found_ids = []
+        found_docs = []
+        found_metadatas = []
+        for doc_id in ids:
+            if doc_id not in record_map:
+                continue
+            found_ids.append(doc_id)
+            found_docs.append(record_map[doc_id]["document"])
+            found_metadatas.append(record_map[doc_id]["metadata"])
+
+        return {
+            "ids": found_ids,
+            "documents": found_docs,
+            "metadatas": found_metadatas,
+        }
+
+
 class MockLLMClient:
-    """模拟大模型客户端 (目前还没接大模型，先占位)"""
     pass
 
-# ==========================================
-# 2. Pipeline 集成测试
-# ==========================================
+
+class FakeMessage:
+    def __init__(self, content: str):
+        self.content = content
+
+
+class FakeChoice:
+    def __init__(self, content: str):
+        self.message = FakeMessage(content)
+
+
+class FakeCompletionResponse:
+    def __init__(self, content: str):
+        self.choices = [FakeChoice(content)]
+
+
+class FakeCompletions:
+    def __init__(self, content: str):
+        self.content = content
+        self.calls = []
+
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeCompletionResponse(self.content)
+
+
+class FakeChatAPI:
+    def __init__(self, content: str):
+        self.completions = FakeCompletions(content)
+
+
+class FakeLLMClient:
+    def __init__(self, content: str):
+        self.chat = FakeChatAPI(content)
+
+
 @pytest.fixture
 def pipeline():
-    """Pytest 夹具：在每次测试前组装好 Pipeline"""
     law_col = MockCollection("norm")
     case_col = MockCollection("case")
-    llm_client = MockLLMClient()
-    return CaseAnalysisPipeline(law_col, case_col, llm_client)
+    return CaseAnalysisPipeline(law_col, case_col, MockLLMClient())
+
 
 @pytest.mark.asyncio
-async def test_analyze_chat_turn(pipeline: CaseAnalysisPipeline):
-    """测试多轮对话的状态流转 (StateMachine)"""
-    # 模拟用户刚进来的第一句话
+async def test_analyze_chat_turn_uses_rule_based_fallback_without_llm(pipeline: CaseAnalysisPipeline):
     messages = [Message(role="user", content="公司拖欠我工资！")]
     case_input = CaseInput(messages=messages, extracted_info={"_stage": "initial"})
-    
+
     response = await pipeline.analyze_chat_turn(case_input)
-    
-    # 验证状态机是否正确向下流转
-    assert response.conversation_stage == "basic_facts", "应该从 initial 流转到 basic_facts"
-    assert len(response.quick_replies) > 0, "必须生成快捷回复按钮"
-    # 验证是否顺手提取了实体
-    assert response.extracted_info.get("employer_type") == "company", "必须识别出'公司'实体"
+
+    assert response.conversation_stage == "basic_facts"
+    assert response.quick_replies
+    assert response.extracted_info.get("employer_type") == "company"
+    assert response.reply_source == "rule_based"
+
+
+@pytest.mark.asyncio
+async def test_analyze_chat_turn_prefers_legalone_when_available():
+    law_col = MockCollection("norm")
+    case_col = MockCollection("case")
+    llm_client = FakeLLMClient("依据《劳动合同法》第三十条，用人单位应及时足额支付工资。请问您是否有转账记录或劳动合同？")
+    pipeline = CaseAnalysisPipeline(law_col, case_col, llm_client)
+
+    response = await pipeline.analyze_chat_turn(
+        CaseInput(
+            messages=[Message(role="user", content="公司拖欠我工资")],
+            extracted_info={"_stage": "initial"},
+        )
+    )
+
+    assert response.reply_source == "legalone"
+    assert "《劳动合同法》第三十条" in response.reply
+    assert llm_client.chat.completions.calls
+
 
 @pytest.mark.asyncio
 async def test_run_full_analysis(pipeline: CaseAnalysisPipeline):
-    """测试核心链路：从输入到生成 IRAC 的端到端分析"""
-    # 给定一个证据确凿的完美案情
     messages = [Message(role="user", content="建筑公司拖欠了我8000块，我有劳动合同，也有微信转账记录和考勤记录。")]
     case_input = CaseInput(messages=messages)
-    
+
     response = await pipeline.run_full_analysis(case_input)
-    
-    # 验证是否生成了完整分析结果
+
     assert isinstance(response, FullAnalysisResponse)
-    
-    # 检查检索层是否工作
-    assert len(response.retrieved_authorities) > 0
-    
-    # 检查事实抽取是否工作
-    fact_types = [f.fact_type for f in response.facts]
+    assert response.retrieved_authorities
+
+    fact_types = [fact.fact_type for fact in response.facts]
     assert "amount" in fact_types
     assert "contract_status" in fact_types
-    
-    # 检查 IRAC 生成是否工作
-    assert len(response.irac_drafts) > 0
+
+    assert response.irac_drafts
     draft = response.irac_drafts[0]
-    assert draft.issue != ""
-    assert draft.application != ""
+    assert draft.issue
+    assert draft.application
+
 
 @pytest.mark.asyncio
 async def test_generate_document(pipeline: CaseAnalysisPipeline):
-    """测试文书生成环节的拼装逻辑"""
-    # 伪造一个前面的分析结果
-    mock_case_input = CaseInput(messages=[], extracted_info={
-        "amount": "8000元",
-        "employer_name": "某某建设工程有限公司",
-        "worker_name": "张三"
-    })
-    
-    mock_analysis = FullAnalysisResponse(
-        case_summary="", retrieved_authorities=[], issues=[], facts=[], element_matches=[], reason_bundles=[],
-        irac_drafts=[IRACDraft(issue="测试", rule="", application="案件事实明确，存在拖欠", conclusion="", citations=[])],
-        verification=VerificationResult(is_complete=True, missing_elements=[], consistency_warnings=["证据尚有瑕疵"])
+    mock_case_input = CaseInput(
+        messages=[],
+        extracted_info={
+            "amount": "8000元",
+            "employer_name": "某建设工程有限公司",
+            "worker_name": "张三",
+        },
     )
-    
+
+    mock_analysis = FullAnalysisResponse(
+        case_summary="",
+        retrieved_authorities=[],
+        issues=[],
+        facts=[],
+        element_matches=[],
+        reason_bundles=[],
+        irac_drafts=[
+            IRACDraft(
+                issue="测试",
+                rule="",
+                application="案件事实明确，存在拖欠工资情形。",
+                conclusion="",
+                citations=[],
+            )
+        ],
+        verification=VerificationResult(consistency_warnings=["证据仍需补强"]),
+    )
+
     request = DocumentGenerationRequest(case_input=mock_case_input, analysis=mock_analysis)
     response = await pipeline.generate_document(request)
-    
-    # 验证占位符是否被正确替换
+
     assert "张三" in response.document
-    assert "某某建设工程有限公司" in response.document
+    assert "某建设工程有限公司" in response.document
     assert "8000元" in response.document
-    assert "案件事实明确，存在拖欠" in response.document
-    assert "证据尚有瑕疵" in response.risk_notes[0]
+    assert "案件事实明确，存在拖欠工资情形。" in response.document
+    assert "证据仍需补强" in response.risk_notes[0]
+
+
+@pytest.mark.asyncio
+async def test_generate_document_switches_to_arbitration_when_not_yet_arbitrated(pipeline: CaseAnalysisPipeline):
+    mock_case_input = CaseInput(
+        messages=[],
+        extracted_info={
+            "name": "张三",
+            "employer_name": "某劳务公司",
+            "amount": "12000元",
+            "has_arbitration": False,
+        },
+    )
+    mock_analysis = FullAnalysisResponse(
+        case_summary="",
+        retrieved_authorities=[],
+        issues=[],
+        facts=[],
+        element_matches=[],
+        reason_bundles=[],
+        irac_drafts=[],
+        verification=VerificationResult(),
+    )
+
+    response = await pipeline.generate_document(
+        DocumentGenerationRequest(
+            document_type="labor_arbitration_application",
+            case_input=mock_case_input,
+            analysis=mock_analysis,
+        )
+    )
+
+    assert "劳动仲裁申请书" in response.document
+    assert "请求裁决被申请人支付拖欠工资 12000元" in response.document
+
+
+@pytest.mark.asyncio
+async def test_generate_document_docx_returns_word_bytes_and_filename(pipeline: CaseAnalysisPipeline):
+    case_input = CaseInput(
+        messages=[Message(role="user", content="公司拖欠了我8000元工资")],
+        extracted_info={
+            "name": "张三",
+            "employer_name": "某建设工程有限公司",
+            "has_arbitration": False,
+        },
+    )
+
+    file_bytes, filename = await pipeline.generate_document_docx(case_input)
+
+    assert filename == "劳动仲裁申请书.docx"
+    assert file_bytes[:2] == b"PK"

@@ -36,6 +36,30 @@ class ChromaRepository:
 
         return formatted_results
 
+    def get_by_ids(self, ids: list[str]) -> list[dict[str, Any]]:
+        """Fetch concrete documents by ids and normalize the result."""
+        if self.collection is None or not ids:
+            return []
+
+        raw_results = self.collection.get(ids=ids, include=["documents", "metadatas"])
+        if not raw_results or not raw_results.get("ids"):
+            return []
+
+        docs = raw_results.get("documents") or []
+        metadatas = raw_results.get("metadatas") or [{}] * len(docs)
+        formatted_results = []
+
+        for doc_id, doc, meta in zip(raw_results["ids"], docs, metadatas):
+            formatted_results.append(
+                {
+                    "source_id": doc_id,
+                    "content": doc,
+                    "metadata": meta or {},
+                }
+            )
+
+        return formatted_results
+
     def count(self) -> int:
         if self.collection is None:
             return 0

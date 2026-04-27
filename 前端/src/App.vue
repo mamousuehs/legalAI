@@ -86,7 +86,7 @@
                 class="form-input"
                 type="text"
                 v-model="intakeForm.employerType"
-                placeholder="例：李老板（包工头）、北京某建筑公司"
+                placeholder="例：张三（包工头）或某建筑公司"
                 maxlength="50"
               />
             </div>
@@ -113,7 +113,7 @@
             <div class="form-item">
               <label class="form-label">
                 <span class="label-icon">📅</span>
-                欠薪时间段
+                这笔钱是您哪段时间干活的工资？
               </label>
               <div class="date-range-row">
                 <input
@@ -130,7 +130,42 @@
               </div>
             </div>
 
-            <!-- 6. 是否已完成劳动仲裁 -->
+            <div class="form-item limitation-section">
+              <label class="form-label">
+                <span class="label-icon">⏰</span>
+                老板原本【最晚】该在什么时候发这笔钱给您？
+              </label>
+              <input 
+                class="form-input" 
+                type="month" 
+                v-model="intakeForm.wageDueDate" 
+              />
+              
+              <div v-if="intakeForm.wageDueDate" class="fade-in-question">
+                <p style="margin: 10px 0; font-size: 14px; color: #555;">在那之后，您有没有向老板讨要过这笔钱（如微信催要、录音等），并且能找到证据？</p>
+                <div class="toggle-group">
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasDemanded === true }" @click="intakeForm.hasDemanded = true">有去要过</button>
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasDemanded === false }" @click="intakeForm.hasDemanded = false">没要过/没证据</button>
+                </div>
+              </div>
+
+              <div v-if="intakeForm.hasDemanded === true" class="fade-in-question">
+                <p style="margin: 10px 0; font-size: 14px; color: #555;">从第一次讨要开始，直到现在，您是一直在断断续续地催老板给钱吗？</p>
+                <div class="toggle-group">
+                  <button class="toggle-btn" :class="{ active: intakeForm.isContinuousDemand === true }" @click="intakeForm.isContinuousDemand = true">是的，一直在催</button>
+                  <button class="toggle-btn" :class="{ active: intakeForm.isContinuousDemand === false }" @click="intakeForm.isContinuousDemand = false">不是</button>
+                </div>
+              </div>
+
+              <div v-if="intakeForm.isContinuousDemand === true" class="fade-in-question">
+                <p style="margin: 10px 0; font-size: 14px; color: #555;">在这期间，有没有哪两次讨要之间，中间停了 <b style="color:#e65100">超过 3 年</b> 没去管它？</p>
+                <div class="toggle-group">
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasLongGap === true }" @click="intakeForm.hasLongGap = true">有停过3年以上</button>
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasLongGap === false }" @click="intakeForm.hasLongGap = false">没有，经常催</button>
+                </div>
+              </div>
+            </div>
+
             <div class="form-item">
               <label class="form-label">
                 <span class="label-icon">⚖️</span>
@@ -151,6 +186,26 @@
                 >
                   ❌ 尚未仲裁
                 </button>
+              </div>
+
+              <div v-if="intakeForm.hasArbitration === false" class="fade-in-question">
+                <p style="margin: 10px 0; font-size: 14px; color: #555;">
+                  从老板本该发工资那天（或者您离职那天）算起，到现在 <b style="color:#e65100">超过 1 年</b> 了吗？
+                </p>
+                <div class="toggle-group">
+                  <button class="toggle-btn" :class="{ active: intakeForm.isOverOneYear === false }" @click="intakeForm.isOverOneYear = false">没有超1年</button>
+                  <button class="toggle-btn" :class="{ active: intakeForm.isOverOneYear === true }" @click="intakeForm.isOverOneYear = true">已超过1年</button>
+                </div>
+              </div>
+
+              <div v-if="intakeForm.hasArbitration === false && intakeForm.isOverOneYear === true" class="fade-in-question">
+                <p style="margin: 10px 0; font-size: 14px; color: #555;">
+                  超过 1 年不要紧！在这期间，您有没有去催老板给钱、或者找过劳动局（并且留下了微信记录或录音等证据）？
+                </p>
+                <div class="toggle-group">
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasDemandedInOneYear === true }" @click="intakeForm.hasDemandedInOneYear = true">有证据去要过</button>
+                  <button class="toggle-btn" :class="{ active: intakeForm.hasDemandedInOneYear === false }" @click="intakeForm.hasDemandedInOneYear = false">没要过/没证据</button>
+                </div>
               </div>
             </div>
 
@@ -279,6 +334,19 @@
           </div>
 
           <div class="input-area">
+            <div class="doc-actions">
+              <p class="doc-hint" :class="{ warning: shouldRecommendArbitrationDoc }">
+                {{ documentHelperText }}
+              </p>
+              <button
+                class="doc-btn"
+                @click="generateWordDocument"
+                :disabled="isLoading || isGeneratingDoc || !canGenerateWord"
+              >
+                <span v-if="!isGeneratingDoc">{{ documentButtonText }}</span>
+                <span v-else>生成中...</span>
+              </button>
+            </div>
             <div class="input-row">
               <textarea
                 ref="inputBox"
@@ -353,55 +421,75 @@
 // =====================================================================
 const API_BASE_URL = 'http://127.0.0.1:8000'
 
-async function callAgentAPI(messages, intakeData) {
-  const lastUserText = messages[messages.length - 1].content
-  const response = await fetch(`${API_BASE_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: lastUserText,
-      user_info: intakeData,
-    })
-  })
-  if (!response.ok) throw new Error(`API 请求失败: ${response.status}`)
-  return await response.json()
-}
-
-// =====================================================================
-// 假数据（联调时替换为 result.analysis ?? null）
-// =====================================================================
-function getMockAnalysis() {
+function buildCaseInputPayload(messages, intakeData) {
   return {
-    caseInfo: [
-      { label: '当事人',   value: '张某某' },
-      { label: '工作地点', value: '北京市朝阳区某建筑工地' },
-      { label: '用工方',   value: '李老板（个人包工头）' },
-      { label: '工种',     value: '瓦工' },
-      { label: '欠薪金额', value: '¥ 18,000 元' },
-      { label: '欠薪时段', value: '2024年10月—12月（3个月）' },
-    ],
-    legalPaths: [
-      { name: '向劳动监察部门投诉', desc: '拨打 12333 或前往当地劳动局，成本最低，建议优先尝试。', recommended: true },
-      { name: '申请劳动仲裁',       desc: '向劳动人事争议仲裁委员会提交申请，免费且具有法律效力。', recommended: false },
-      { name: '向法院提起诉讼',     desc: '持仲裁裁决书向法院起诉，可追加总包公司为共同被告。',   recommended: false },
-    ],
-    evidence: [
-      { name: '劳务合同 / 用工协议', tip: '如无书面合同，微信聊天记录也可使用', have: true,  importance: 'key' },
-      { name: '欠条 / 工资结算单',   tip: '要求包工头补签欠条，注明金额和日期',   have: false, importance: 'key' },
-      { name: '工资转账记录',        tip: '微信、支付宝或银行转账截图均可',       have: true,  importance: 'key' },
-      { name: '工牌 / 考勤记录',     tip: '证明在该工地实际出勤的凭证',           have: false, importance: 'supplement' },
-      { name: '工友证人联系方式',    tip: '可在仲裁或诉讼中出庭作证',             have: false, importance: 'supplement' },
-    ],
-    laws: [
-      { title: '《劳动法》第五十条',               content: '工资应当以货币形式按月支付给劳动者本人，不得克扣或者无故拖欠劳动者的工资。' },
-      { title: '《劳动合同法》第三十条',           content: '用人单位应当按照劳动合同约定和国家规定，向劳动者及时足额支付劳动报酬。' },
-      { title: '《保障农民工工资支付条例》第三十条', content: '分包单位拖欠农民工工资的，由施工总承包单位先行清偿，再依法进行追偿。' },
-    ],
+    messages,
+    extracted_info: intakeData,
+    case_type_hint: 'taoxin',
   }
 }
 
+async function callAgentAPI(messages, intakeData) {
+  const response = await fetch(`${API_BASE_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildCaseInputPayload(messages, intakeData))
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`API 请求失败: ${response.status} ${errorText}`)
+  }
+  return await response.json()
+}
+
+async function downloadDocumentWordAPI(messages, intakeData) {
+  const response = await fetch(`${API_BASE_URL}/api/generate-document-docx`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildCaseInputPayload(messages, intakeData))
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Word 文书生成失败: ${response.status} ${errorText}`)
+  }
+
+  const blob = await response.blob()
+  const filename = extractFilenameFromDisposition(response.headers.get('Content-Disposition'))
+  return {
+    blob,
+    filename: filename || '劳动维权申请书.docx',
+  }
+}
+
+function extractFilenameFromDisposition(contentDisposition) {
+  if (!contentDisposition) return ''
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match && utf8Match[1]) {
+    return decodeURIComponent(utf8Match[1])
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return plainMatch && plainMatch[1] ? plainMatch[1] : ''
+}
+
+function normalizeEvidenceTypes(evidenceTypes) {
+  if (Array.isArray(evidenceTypes)) return evidenceTypes
+  if (typeof evidenceTypes !== 'string') return []
+
+  return evidenceTypes
+    .split(/[、，,]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function hasContractEvidence(contractStatus) {
+  return contractStatus === true || contractStatus === '有'
+}
+
+
 // =====================================================================
-// 将表单内容拼成自然语言，作为对话首条消息
+// 将表单内容拼成自然语言，作为对话首条消息（已加入严密之时效逻辑）
 // =====================================================================
 function buildIntakeSummary(form) {
   const parts = []
@@ -409,29 +497,54 @@ function buildIntakeSummary(form) {
   if (form.workLocation) parts.push(`在${form.workLocation}工作`)
   if (form.employerType) parts.push(`给"${form.employerType}"干活`)
   if (form.wageAmount)   parts.push(`被拖欠工资共 ${form.wageAmount} 元`)
-  if (form.wageStartMonth && form.wageEndMonth)
-    parts.push(`欠薪时间段是 ${form.wageStartMonth} 至 ${form.wageEndMonth}`)
-  else if (form.wageStartMonth)
+  
+  // 拖欠哪段时期的工资
+  if (form.wageStartMonth && form.wageEndMonth) {
+    parts.push(`这笔钱是 ${form.wageStartMonth} 至 ${form.wageEndMonth} 期间干活的工资`)
+  } else if (form.wageStartMonth) {
     parts.push(`从 ${form.wageStartMonth} 开始欠薪`)
-  if (form.hasArbitration === true)  parts.push('已经完成了劳动仲裁')
-  if (form.hasArbitration === false) parts.push('尚未进行劳动仲裁')
+  }
+
+  // 时效逻辑转化
+  if (form.wageDueDate) {
+    parts.push(`这笔钱本来最晚该在 ${form.wageDueDate} 发给我`)
+    if (form.hasDemanded === false) {
+      parts.push(`但我之后一直没有去要过，或者没有留下讨要的证据`)
+    } else if (form.hasDemanded === true) {
+      parts.push(`之后我有去讨要过并且有证据`)
+      if (form.isContinuousDemand === true) {
+        if (form.hasLongGap === false) {
+          parts.push(`从那以后我一直在断断续续地催，两次催要之间从来没有间隔超过3年`)
+        } else if (form.hasLongGap === true) {
+          parts.push(`虽然我一直在催，但中间有一次停了超过3年没去管`)
+        }
+      } else if (form.isContinuousDemand === false) {
+        parts.push(`但并没有一直持续去催要`)
+      }
+    }
+  }
+
+  // 仲裁及1年时效逻辑转化
+  if (form.hasArbitration === true) {
+    parts.push('我已经完成了劳动仲裁')
+  } else if (form.hasArbitration === false) {
+    let arbStr = '我尚未进行劳动仲裁'
+    if (form.isOverOneYear === false) {
+      arbStr += '，且距离发生欠薪到现在还没超过 1 年'
+    } else if (form.isOverOneYear === true) {
+      arbStr += '，距离发生欠薪到现在已经超过 1 年了'
+      if (form.hasDemandedInOneYear === true) {
+        arbStr += '（但我这期间有去讨要过，且有证据）'
+      } else if (form.hasDemandedInOneYear === false) {
+        arbStr += '（并且我这期间一直没去要过，或者拿不出讨要的证据）'
+      }
+    }
+    parts.push(arbStr)
+  }
   if (parts.length === 0) return null
-  return parts.join('，') + '。请帮我分析如何维权。'
+  return parts.join('，') + '。请结合劳动争议时效帮我分析如何维权。'
 }
 
-// =====================================================================
-// 检查哪些字段还未填，用于对话中提醒
-// =====================================================================
-function getMissingFields(form) {
-  const missing = []
-  if (!form.name)           missing.push('您的姓名')
-  if (!form.workLocation)   missing.push('工作地点')
-  if (!form.employerType)   missing.push('用工方名称')
-  if (!form.wageAmount)     missing.push('欠薪金额')
-  if (!form.wageStartMonth) missing.push('欠薪时间段')
-  if (form.hasArbitration === null) missing.push('是否已完成劳动仲裁')
-  return missing
-}
 
 // =====================================================================
 // Vue 组件
@@ -447,21 +560,87 @@ export default {
       messages: [],
       userInput: '',
       isLoading: false,
+      isGeneratingDoc: false,
+
+      // 联调关键：记住后端的提问阶段
+      currentStage: 'initial', 
+      extractedInfoState: {},
 
       intakeForm: {
         name:           '',    // 姓名
         workLocation:   '',    // 工作地址
-        employerType:   '',    // 用工方描述（自由填写，原始字符串）
+        employerType:   '',    // 用工方描述
         wageAmount:     '',    // 欠薪金额（元）
         wageStartMonth: '',    // 欠薪开始月份 yyyy-MM
         wageEndMonth:   '',    // 欠薪结束月份 yyyy-MM
         hasArbitration: null,  // true | false | null
+        
+        // 新增：时效审查字段
+        wageDueDate: '',           // 本该发工资的日期
+        hasDemanded: null,         // 是否有过追讨
+        isContinuousDemand: null,  // 是否持续追讨
+        hasLongGap: null,          // 间隔是否超过3年
+        // 👇 新增：1年仲裁时效变量
+          isOverOneYear: null,          // 超过1年了吗？
+          hasDemandedInOneYear: null,   // 期间有要过吗？
       },
     }
   },
 
-  methods: {
+  computed: {
+    apiMessages() {
+      return this.messages
+        .filter(m => !m.isSystem)
+        .map(m => ({ role: m.role, content: m.content }))
+    },
 
+    currentIntakeData() {
+      return {
+        ...this.extractedInfoState,
+        name: this.intakeForm.name || this.extractedInfoState.name || null,
+        work_location: this.intakeForm.workLocation || this.extractedInfoState.work_location || null,
+        employer_type: this.intakeForm.employerType || this.extractedInfoState.employer_type || null,
+        wage_amount: this.intakeForm.wageAmount
+          ? Number(this.intakeForm.wageAmount)
+          : (this.extractedInfoState.wage_amount ?? null),
+        wage_period: (this.intakeForm.wageStartMonth && this.intakeForm.wageEndMonth)
+          ? `${this.intakeForm.wageStartMonth} 至 ${this.intakeForm.wageEndMonth}`
+          : (this.extractedInfoState.wage_period || null),
+        has_arbitration: this.intakeForm.hasArbitration ?? this.extractedInfoState.has_arbitration ?? null,
+        is_over_one_year: this.intakeForm.isOverOneYear ?? null,
+        has_demanded_in_one_year: this.intakeForm.hasDemandedInOneYear ?? null,
+        // 把时效数据传给后端
+        wage_due_date: this.intakeForm.wageDueDate || null,
+        has_demanded: this.intakeForm.hasDemanded ?? null,
+        is_continuous_demand: this.intakeForm.isContinuousDemand ?? null,
+        has_long_gap: this.intakeForm.hasLongGap ?? null,
+        
+        _stage: this.currentStage,
+      }
+    },
+
+    canGenerateWord() {
+      return this.apiMessages.some(message => message.role === 'user')
+    },
+
+    shouldRecommendArbitrationDoc() {
+      return this.currentIntakeData.has_arbitration === false
+    },
+
+    documentButtonText() {
+      return this.shouldRecommendArbitrationDoc
+        ? '生成仲裁申请书 Word'
+        : '生成申请书 Word'
+    },
+
+    documentHelperText() {
+      return this.shouldRecommendArbitrationDoc
+        ? '您尚未完成劳动仲裁，建议优先生成并下载劳动仲裁申请书。'
+        : '可根据当前对话直接生成 Word 文书并下载。'
+    },
+  },
+
+  methods: {
     submitIntake() {
       this.currentStep = 'chat'
       this.$nextTick(() => {
@@ -498,38 +677,27 @@ export default {
       this.isLoading = true
       this.scrollToBottom()
 
-      const apiMessages = this.messages
-        .filter(m => !m.isSystem)
-        .map(m => ({ role: m.role, content: m.content }))
-
-      // 发送给后端的 user_info，字段名与之前保持一致
-      // employerType 保持原始字符串传输，后端自行解析
-      const intakeData = {
-        name:            this.intakeForm.name           || null,
-        work_location:   this.intakeForm.workLocation   || null,
-        employer_type:   this.intakeForm.employerType   || null,
-        wage_amount:     this.intakeForm.wageAmount     ? Number(this.intakeForm.wageAmount) : null,
-        wage_period:     (this.intakeForm.wageStartMonth && this.intakeForm.wageEndMonth)
-                           ? `${this.intakeForm.wageStartMonth} 至 ${this.intakeForm.wageEndMonth}`
-                           : null,
-        has_arbitration: this.intakeForm.hasArbitration,
-      }
+      const apiMessages = this.apiMessages
+      const intakeData = this.currentIntakeData
 
       try {
         const result = await callAgentAPI(apiMessages, intakeData)
 
+        if (result.conversation_stage) {
+          this.currentStage = result.conversation_stage
+        }
+        if (result.extracted_info) {
+          this.extractedInfoState = {
+            ...this.extractedInfoState,
+            ...result.extracted_info,
+          }
+        }
+
         let finalReply = result.reply || ''
         finalReply = finalReply.replace(/<think>[\s\S]*?<\/think>/, '').trim()
 
-        const missing = getMissingFields(this.intakeForm)
-        if (missing.length > 0) {
-          finalReply += `\n\n📝 **为了帮您更准确地分析，还需要了解：${missing.join('、')}，请补充说明。**`
-        }
-
-        // 联调时改为：const analysis = result.analysis ?? null
-        const analysis = getMockAnalysis()
-
-        this.pushAssistantMessage(finalReply, [], analysis)
+        const analysis = this.adaptRealDataToFrontend(result)
+        this.pushAssistantMessage(finalReply, result.quick_replies || [], analysis)
 
       } catch (e) {
         console.error('API调用报错:', e)
@@ -538,6 +706,88 @@ export default {
         this.isLoading = false
         this.$nextTick(() => this.scrollToBottom())
       }
+    },
+
+    async generateWordDocument() {
+      if (!this.canGenerateWord || this.isGeneratingDoc) return
+
+      this.isGeneratingDoc = true
+      try {
+        const { blob, filename } = await downloadDocumentWordAPI(this.apiMessages, this.currentIntakeData)
+        const downloadUrl = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000)
+      } catch (e) {
+        console.error('Word文书生成报错:', e)
+        this.pushAssistantMessage('抱歉，暂时无法生成 Word 文书，请稍后重试。')
+      } finally {
+        this.isGeneratingDoc = false
+      }
+    },
+
+    adaptRealDataToFrontend(response) {
+      if (!response || !response.extracted_info) return null;
+      
+      const info = response.extracted_info || {};
+      
+      // 现在我们确信这两个函数一定存在了，因为我们把它们写在了最上面
+      const evidenceTypes = normalizeEvidenceTypes(info.evidence_types);
+                            
+      const laws = (response.retrieved_authorities || [])
+        .filter(auth => auth.source_type === 'norm' || auth.source_type === 'law')
+        .map(auth => ({
+          title: auth.title || '适用法条',
+          content: auth.snippet || '暂无内容概要'
+        }))
+        
+      const hasStructuredInfo = [
+        info.worker_name, info.name, info.location, info.work_location,
+        info.employer_name, info.employer_type, info.job_title,
+        info.amount, info.wage_amount, info.time_period, info.wage_period,
+      ].some(Boolean)
+
+      if (!hasStructuredInfo && !laws.length && !(response.issues || []).length) {
+        return null
+      }
+
+      const hasArbitration = info.has_arbitration ?? this.currentIntakeData.has_arbitration
+      const legalPaths = hasArbitration === false
+        ? [
+            { name: '申请劳动仲裁', desc: '您尚未完成劳动仲裁，建议先生成仲裁申请书并向劳动人事争议仲裁委员会提交。', recommended: true },
+            { name: '向劳动监察部门投诉', desc: '拨打 12333 或前往当地劳动局，可与仲裁程序并行补充维权。', recommended: false },
+            { name: '向法院提起诉讼', desc: '通常需要在仲裁裁决或终局处理后，再进入诉讼程序。', recommended: false },
+          ]
+        : [
+            { name: '向劳动监察部门投诉', desc: '拨打 12333 或前往当地劳动局，成本最低，建议优先尝试。', recommended: true },
+            { name: '申请劳动仲裁', desc: '向劳动人事争议仲裁委员会提交申请，免费且具有法律效力。', recommended: false },
+            { name: '向法院提起诉讼', desc: '持仲裁裁决书向法院起诉，可追加总包公司为共同被告。', recommended: false },
+          ]
+      
+      return {
+        caseInfo: [
+          { label: '当事人',   value: info.worker_name || info.name || '待补充' },
+          { label: '工作地点', value: info.location || info.work_location || '待补充' },
+          { label: '用工方',   value: info.employer_name || info.employer_type || '待补充' },
+          { label: '工种',     value: info.job_title || '待补充' },
+          { label: '欠薪金额', value: info.amount || info.wage_amount || '待补充' },
+          { label: '欠薪时段', value: info.time_period || info.wage_period || '待补充' },
+        ],
+        legalPaths,
+        evidence: [
+          { name: '劳务合同 / 用工协议', tip: '如无书面合同，微信聊天记录也可使用', 
+            have: hasContractEvidence(info.has_contract), importance: 'key' },
+          { name: '欠条 / 工资结算单',   tip: '要求包工头补签欠条，注明金额和日期',  
+            have: evidenceTypes.includes('欠条') || evidenceTypes.includes('工资结算单'), importance: 'key' },
+          { name: '工资转账记录',        tip: '微信、支付宝或银行转账截图均可',      
+            have: evidenceTypes.includes('转账记录') || evidenceTypes.includes('工资转账记录'), importance: 'key' },
+        ],
+        laws,
+      };
     },
 
     pushUserMessage(content) {
@@ -575,11 +825,15 @@ export default {
     restartChat() {
       if (!confirm('确定要重新开始吗？当前对话内容将清空。')) return
       this.messages = []
+      this.extractedInfoState = {}
       this.intakeForm = {
-        name: '', workLocation: '', employerType: '',
-        wageAmount: '', wageStartMonth: '', wageEndMonth: '', hasArbitration: null,
+        name: '', workLocation: '', employerType: '', wageAmount: '', 
+        wageStartMonth: '', wageEndMonth: '', hasArbitration: null,
+        wageDueDate: '', hasDemanded: null, isContinuousDemand: null, hasLongGap: null,hasArbitration: null, isOverOneYear: null, hasDemandedInOneYear: null,
       }
       this.currentStep = 'welcome'
+      this.currentStage = 'initial'
+      this.isGeneratingDoc = false
     },
   },
 }
@@ -751,6 +1005,23 @@ export default {
 
 /* 输入区 */
 .input-area { padding: 10px 14px 12px; background: white; border-top: 1px solid var(--border); flex-shrink: 0; }
+.doc-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.doc-hint { font-size: 12px; line-height: 1.5; color: var(--text-light); }
+.doc-hint.warning { color: var(--red-dk); font-weight: 600; }
+.doc-btn {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #F59E0B, #E85D26);
+  color: white;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(232,93,38,0.18);
+}
+.doc-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
 .input-row  { display: flex; gap: 10px; align-items: flex-end; }
 .input-box  { flex: 1; padding: 10px; border: 2px solid var(--border); border-radius: 12px; resize: none; background: var(--bg); min-height: 44px; font-family: var(--font-body); font-size: 15px; }
 .input-box:focus { outline: none; border-color: var(--primary); background: white; }
@@ -776,4 +1047,18 @@ export default {
 .fade-enter-from,   .fade-leave-to       { opacity: 0; }
 .modal-enter-active, .modal-leave-active { transition: transform .3s ease; }
 .modal-enter-from,   .modal-leave-to     { transform: translateY(100%); }
+
+.fade-in-question {
+  padding: 12px;
+  margin-top: 10px;
+  background-color: #fff9f5;
+  border-left: 3px solid #ff7f50;
+  border-radius: 4px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>

@@ -25,6 +25,7 @@ class IRACDraft(BaseModel):
 
 class AnalysisResponse(BaseModel):
     reply: str
+    reply_source: str = "rule_based"
     quick_replies: list[str] = Field(default_factory=list)
     conversation_stage: str
     extracted_info: dict = Field(default_factory=dict)
